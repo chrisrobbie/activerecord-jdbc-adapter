@@ -26,6 +26,15 @@ ArJdbc.load_java_part :MSSQL
 
 require 'strscan'
 
+require 'active_record/connection_adapters/abstract_adapter'
+
+
+require 'arjdbc/abstract/core'
+require 'arjdbc/abstract/connection_management'
+require 'arjdbc/abstract/database_statements'
+require 'arjdbc/abstract/statement_cache'
+require 'arjdbc/abstract/transaction_support'
+
 module ArJdbc
   module MSSQL
 
@@ -91,7 +100,8 @@ module ArJdbc
     # @see #update_lob_values?
     # @see ArJdbc::Util::SerializedAttributes#update_lob_columns
     def update_lob_value?(value, column = nil)
-      MSSQL.update_lob_values? && ! prepared_statements? # && value
+      # NOTE: not sure if we need 'without_prepared_statement?' here
+      MSSQL.update_lob_values? # && without_prepared_statement? # && value
     end
 
     # @see ActiveRecord::ConnectionAdapters::JdbcAdapter#jdbc_connection_class
@@ -319,7 +329,7 @@ module ArJdbc
     def supports_ddl_transactions?; true end
 
     # @override
-    def supports_views?; true end
+    def supports_views?; false end
 
     def tables(schema = current_schema)
       @connection.tables(nil, schema)
@@ -676,7 +686,7 @@ module ArJdbc
       sql = to_sql(sql, binds) if sql.respond_to?(:to_sql)
 
       sql = repair_special_columns(sql)
-      if prepared_statements?
+      unless without_prepared_statement?(binds)
         log(sql, name, binds) { @connection.execute_query(sql, binds) }
       else
         log(sql, name) { @connection.execute_query(sql) }
@@ -688,7 +698,7 @@ module ArJdbc
       sql = to_sql(sql, binds) if sql.respond_to?(:to_sql)
 
       sql = repair_special_columns(sql)
-      if prepared_statements?
+      unless without_prepared_statement?(binds)
         log(sql, name, binds) { @connection.execute_query_raw(sql, binds, &block) }
       else
         log(sql, name) { @connection.execute_query_raw(sql, &block) }
@@ -774,28 +784,64 @@ require 'arjdbc/util/quoted_cache'
 
 module ActiveRecord::ConnectionAdapters
 
-  class MSSQLAdapter < JdbcAdapter
+  class MSSQLAdapter < AbstractAdapter
+
+    include ArJdbc::Abstract::Core
+    include ArJdbc::Abstract::ConnectionManagement
+    include ArJdbc::Abstract::DatabaseStatements
+    include ArJdbc::Abstract::StatementCache
+    include ArJdbc::Abstract::TransactionSupport
+
     include ::ArJdbc::MSSQL
     include ::ArJdbc::Util::QuotedCache
 
-    def initialize(*args)
+    def initialize(connection, logger = nil, connection_parameters = nil, config = {})
       ::ArJdbc::MSSQL.initialize!
+      # configure_connection happens in super
+      super(connection, logger, config)
 
-      super # configure_connection happens in super
+    end
 
-      setup_limit_offset!
+    def jdbc_connection_class(spec)
+      ::ArJdbc::MSSQL.jdbc_connection_class
+    end
+
+    def supports_transaction_isolation?(level = nil)
+      true
     end
 
     def arel_visitor # :nodoc:
-      ( config && config[:sqlserver_version].to_s == '2000' ) ?
-          ::Arel::Visitors::SQLServer2000.new(self) :
-          ::Arel::Visitors::SQLServer.new(self)
+      ::Arel::Visitors::SQLServer.new(self)
     end
-
-    def self.cs_equality_operator; ::ArJdbc::MSSQL.cs_equality_operator end
-    def self.cs_equality_operator=(operator); ::ArJdbc::MSSQL.cs_equality_operator = operator end
-
   end
+
+  # class MSSQLAdapter < JdbcAdapter
+  #   include ::ArJdbc::MSSQL
+  #   include ::ArJdbc::Util::QuotedCache
+
+  #   def initialize(*args)
+  #     ::ArJdbc::MSSQL.initialize!
+
+  #     # configure_connection happens in super
+  #     super
+
+  #     setup_limit_offset!
+  #   end
+
+  #   def arel_visitor # :nodoc:
+  #     ( config && config[:sqlserver_version].to_s == '2000' ) ?
+  #         ::Arel::Visitors::SQLServer2000.new(self) :
+  #         ::Arel::Visitors::SQLServer.new(self)
+  #   end
+
+  #   def self.cs_equality_operator
+  #     ::ArJdbc::MSSQL.cs_equality_operator
+  #   end
+  #
+  #   def self.cs_equality_operator=(operator)
+  #     ::ArJdbc::MSSQL.cs_equality_operator = operator
+  #   end
+  # end
 
   class MSSQLColumn < JdbcColumn
     include ::ArJdbc::MSSQL::Column
