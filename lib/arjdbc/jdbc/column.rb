@@ -27,12 +27,14 @@ module ActiveRecord
         end
 
         if ArJdbc::AR50
-          default = args[0].cast(default)
+          # default = args[0].cast(default)
+          # NOTE: No sure why the above line is needed.
+          default = default_value(default)
 
           sql_type = args.delete_at(1)
           type = args.delete_at(0)
 
-          args.unshift(SqlTypeMetadata.new(:sql_type => sql_type, :type => type))
+          args.unshift(SqlTypeMetadata.new(sql_type: sql_type, type: type))
         elsif ArJdbc::AR42
           default = args[0].type_cast_from_database(default)
         else
