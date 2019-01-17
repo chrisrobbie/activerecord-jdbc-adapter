@@ -44,7 +44,7 @@ module ArJdbc
     require 'arjdbc/mssql/column'
     require 'arjdbc/mssql/explain_support'
     require 'arjdbc/mssql/types' if AR42
-    require 'arel/visitors/sql_server'
+    require 'arel/visitors/sqlserver'
 
     include LimitHelpers
     include Utils
