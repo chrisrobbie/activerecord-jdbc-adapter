@@ -591,20 +591,23 @@ module ArJdbc
     # @private
     EMPTY_ARRAY = [].freeze
 
-    def columns(table_name, name = nil, default = EMPTY_ARRAY)
+    def columns(table_name)
       # It's possible for table_name to be an empty string, or nil, if something
       # attempts to issue SQL which doesn't involve a table.
       # IE. "SELECT 1" or "SELECT * FROM someFunction()".
+      default = EMPTY_ARRAY
+
       return default if table_name.blank?
 
       table_name = unquote_table_name(table_name)
 
       return default if table_name =~ SKIP_COLUMNS_TABLE_NAMES_RE
 
-      unless columns = ( @table_columns ||= {} )[table_name]
-        @table_columns[table_name] = columns = super(table_name, name)
+      unless cols = ( @table_columns ||= {} )[table_name]
+        cols = @connection.columns(table_name)
+        @table_columns[table_name] = cols
       end
-      columns
+      cols
     end
 
     def clear_cached_table(table_name)
@@ -766,7 +769,7 @@ module ArJdbc
     end
 
     def special_column_names(qualified_table_name)
-      columns = self.columns(qualified_table_name, nil, nil)
+      columns = self.columns(qualified_table_name)
       return columns if ! columns || columns.empty?
       special = []
       columns.each { |column| special << column.name if column.special? }
@@ -808,6 +811,15 @@ module ActiveRecord::ConnectionAdapters
 
     def supports_transaction_isolation?(level = nil)
       true
+    end
+
+    # Returns an array of view names defined in the database.
+    def views
+      []
+    end
+
+    def primary_keys(table_name)
+      @connection.primary_keys(table_name)
     end
 
     def arel_visitor # :nodoc:
