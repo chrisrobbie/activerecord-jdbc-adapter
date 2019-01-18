@@ -17,7 +17,8 @@ module Arel
       # SQLServer ToSql/Visitor (Overides)
 
       def visit_Arel_Nodes_BindParam o, collector
-        collector.add_bind(o) { |i| "@#{i-1}" }
+        # collector.add_bind(o) { |i| "@#{i-1}" }
+        collector.add_bind(o) { |i| '?' }
       end
 
       def visit_Arel_Nodes_Bin o, collector
@@ -193,8 +194,7 @@ module Arel
 
       def primary_Key_From_Table t
         return unless t
-        column_name = @connection.schema_cache.primary_keys(t.name) ||
-          @connection.schema_cache.columns_hash(t.name).first.try(:second).try(:name)
+        column_name = schema_cache.primary_keys(t.name) || column_cache(t.name).first.try(:second).try(:name)
         column_name ? t[column_name] : nil
       end
 
